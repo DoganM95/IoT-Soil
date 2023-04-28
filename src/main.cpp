@@ -33,6 +33,9 @@ ushort cycleDelayInMilliSeconds = 100;
 TaskHandle_t wifiConnectionHandlerThreadFunctionHandle;
 TaskHandle_t blynkConnectionHandlerThreadFunctionHandle;
 
+void wifiConnectionHandlerThreadFunction(void* params);
+void blynkConnectionHandlerThreadFunction(void* params);
+
 const uint AOUT_PIN = 25;  // ESP32 pin GIOP36 (ADC0) that connects to AOUT pin of moisture sensor
 
 uint desert = 3700;    // The adc value measured at dryest state (just outside of pot)
@@ -58,20 +61,15 @@ BLYNK_CONNECTED() {  // Restore hardware pins according to current UI config
   Blynk.syncAll();
 }
 
-BLYNK_WRITE(V1) { 
-  int pinValue = param.asInt();
-  digitalWrite(openCurtainsPin, 1);
-  delay(pressDuration);
-  digitalWrite(openCurtainsPin, 0);
-}
-
 // General functions
 
 void measureMoisture(void* params) {
   uint value = analogRead(AOUT_PIN);  // read the analog value from sensor
+  uint percentage = moistureLevel(value, aquarium, desert);
   Serial.printf("Moisture value: %d\n", value);
-  Serial.printf("Moisture percentage: %d\n", moistureLevel(value, aquarium, desert));
+  Serial.printf("Moisture percentage: %d\n", percentage);
   Serial.println("");
+  Blynk.virtualWrite(V0, percentage);
   delay(1000);
 }
 
