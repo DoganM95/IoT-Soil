@@ -1,2 +1,12 @@
-.pio
+**/.pio
 **/.vscode/
+
+**/Configuration/*
+
+!***_example.h
+
+**/*.bkp
+**/*.log
+
+desktop.ini
+*.ico
