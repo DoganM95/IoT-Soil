@@ -32,11 +32,13 @@ ushort cycleDelayInMilliSeconds = 100;
 // Task Handles
 TaskHandle_t wifiConnectionHandlerThreadFunctionHandle;
 TaskHandle_t blynkConnectionHandlerThreadFunctionHandle;
+TaskHandle_t moistureMeasurementThreadFunctionHandle;
 
 void wifiConnectionHandlerThreadFunction(void* params);
 void blynkConnectionHandlerThreadFunction(void* params);
+void measureMoisture(void* params);
 
-const uint AOUT_PIN = 25;  // ESP32 pin GIOP36 (ADC0) that connects to AOUT pin of moisture sensor
+const uint AOUT_PIN = 36;  // ESP32 pin (ADC0) that connects to AOUT pin of moisture sensor
 
 uint desert = 3700;    // The adc value measured at dryest state (just outside of pot)
 uint aquarium = 1400;  // The adv value measured a couple minutes after drowning the poor plant in water
@@ -47,6 +49,7 @@ void setup() {
   Serial.begin(115200);
   xTaskCreatePinnedToCore(wifiConnectionHandlerThreadFunction, "Wifi Connection Handling Thread", wifiHandlerThreadStackSize, NULL, 20, &wifiConnectionHandlerThreadFunctionHandle, 1);
   xTaskCreatePinnedToCore(blynkConnectionHandlerThreadFunction, "Blynk Connection Handling Thread", blynkHandlerThreadStackSize, NULL, 20, &blynkConnectionHandlerThreadFunctionHandle, 1);
+  xTaskCreatePinnedToCore(measureMoisture, "Moisture Level Measurement Thread", 10000, NULL, 20, &moistureMeasurementThreadFunctionHandle, 1);
 }
 
 void loop() { Blynk.run(); }
@@ -64,16 +67,19 @@ BLYNK_CONNECTED() {  // Restore hardware pins according to current UI config
 // General functions
 
 void measureMoisture(void* params) {
-  uint value = analogRead(AOUT_PIN);  // read the analog value from sensor
-  uint percentage = moistureLevel(value, aquarium, desert);
-  Serial.printf("Moisture value: %d\n", value);
-  Serial.printf("Moisture percentage: %d\n", percentage);
-  Serial.println("");
-  Blynk.virtualWrite(V0, percentage);
-  delay(1000);
+  while (true) {
+    uint value = analogRead(AOUT_PIN);  // read the analog value from sensor
+    uint percentage = moistureLevel(value, aquarium, desert);
+    Serial.printf("Moisture value: %d\n", value);
+    Serial.printf("Moisture percentage: %d\n", percentage);
+    Serial.println("");
+    Blynk.virtualWrite(V0, percentage);
+    delay(1000);
+  }
 }
 
 uint moistureLevel(uint sensorValue, uint min, uint max) {
+  if (sensorValue < min) return 0;
   uint range = max - min;
   uint step = range / 100;
   uint percentage = 100 - ((sensorValue - min) / step);
@@ -132,7 +138,13 @@ void blynkConnectionHandlerThreadFunction(void* params) {
         Blynk.config(BLYNK_AUTH, BLYNK_SERVER, BLYNK_PORT);
       else
         Blynk.config(BLYNK_AUTH);
-      Blynk.connect();  // Connects using the chosen Blynk.config
+      Serial.printf("Pre- Blynk.connect()\n");
+      try {
+        Blynk.connect(10000);  // Connects using the chosen Blynk.config
+      } catch (...) {
+        Serial.printf("Blynk.connect() timed out\n");
+      }
+      Serial.printf("Post- Blynk.connect()\n");
       uint time = 0;
       while (!Blynk.connected()) {
         if (time >= blynkConnectionTimeout || Blynk.connected()) break;
