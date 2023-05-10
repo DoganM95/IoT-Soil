@@ -1,19 +1,32 @@
-#include <Arduino.h>
-#include <freertos/FreeRTOS.h>
-
-#include "esp_chip_info.h"
-#include "esp_flash.h"
-#include "freertos/task.h"
-
 // Configurations
 #include "./Configuration/Blynk.h"
 #include "./Configuration/Wifi.h"
 
 // Libraries
+#include <Blynk/BlynkApi.h>    // Used for Blynk.notify()
 #include <BlynkSimpleEsp32.h>  // Part of Blynk by Volodymyr Shymanskyy
 #include <WiFi.h>              // Part of WiFi Built-In by Arduino
 #include <WiFiClient.h>        // Part of WiFi Built-In by Arduino
 #include <math.h>
+
+// Pins (ESP devboard with soil pcb connected using dupont wires)
+const ushort AOUT_PIN = 36;  // ESP32 pin (ADC0) that connects to AOUT pin of moisture sensor
+
+// Pins (Built-in to DiyMore Esp32 soil module)
+const ushort DHT11_PIN = 22;     // DHT11 air humidity sensor
+const ushort ADC_PIN_1 = 32;     // ADC 1
+const ushort LED_BLUE_PIN = 33;  // built in blue led
+const ushort ADC_PIN_2 = 34;     // ADC 2
+
+// GPIO pins that are not connected (according to manual)
+const ushort nc06 = 6;
+const ushort nc07 = 7;
+const ushort nc08 = 8;
+const ushort nc11 = 11;
+const ushort nc20 = 20;
+const ushort nc24 = 24;
+const ushort nc37 = 37;
+const ushort nc38 = 38;
 
 // Limits
 const int wifiHandlerThreadStackSize = 10000;
@@ -33,23 +46,30 @@ ushort cycleDelayInMilliSeconds = 100;
 TaskHandle_t wifiConnectionHandlerThreadFunctionHandle;
 TaskHandle_t blynkConnectionHandlerThreadFunctionHandle;
 TaskHandle_t moistureMeasurementThreadFunctionHandle;
+TaskHandle_t waterNotifierThreadFunctionHandle;
 
 void wifiConnectionHandlerThreadFunction(void* params);
 void blynkConnectionHandlerThreadFunction(void* params);
 void measureMoisture(void* params);
+void waterNotifier(void* params);
 
-const uint AOUT_PIN = 36;  // ESP32 pin (ADC0) that connects to AOUT pin of moisture sensor
+uint moistureLevel(uint sensorValue, uint min, uint max);
+void WaitForBlynk(int cycleDelayInMilliSeconds);
 
+// Config
 uint desert = 3700;    // The adc value measured at dryest state (just outside of pot)
 uint aquarium = 1400;  // The adv value measured a couple minutes after drowning the poor plant in water
 
-uint moistureLevel(uint sensorValue, uint min, uint max);
+// Blynk vars (global)
+uint minimumSoilMoisturePercentage;
+uint currentSoiMoisturePercentage;
 
 void setup() {
   Serial.begin(115200);
   xTaskCreatePinnedToCore(wifiConnectionHandlerThreadFunction, "Wifi Connection Handling Thread", wifiHandlerThreadStackSize, NULL, 20, &wifiConnectionHandlerThreadFunctionHandle, 1);
   xTaskCreatePinnedToCore(blynkConnectionHandlerThreadFunction, "Blynk Connection Handling Thread", blynkHandlerThreadStackSize, NULL, 20, &blynkConnectionHandlerThreadFunctionHandle, 1);
-  xTaskCreatePinnedToCore(measureMoisture, "Moisture Level Measurement Thread", 10000, NULL, 20, &moistureMeasurementThreadFunctionHandle, 1);
+  xTaskCreatePinnedToCore(measureMoisture, "Moisture Level Measurement Thread", 10000, NULL, 20, &moistureMeasurementThreadFunctionHandle, 0);
+  xTaskCreatePinnedToCore(waterNotifier, "Water Notifier Thread", 10000, NULL, 20, &waterNotifierThreadFunctionHandle, 0);
 }
 
 void loop() { Blynk.run(); }
@@ -64,16 +84,36 @@ BLYNK_CONNECTED() {  // Restore hardware pins according to current UI config
   Blynk.syncAll();
 }
 
+BLYNK_WRITE(V1)  // Button Widget is writing to pin V1
+{
+  minimumSoilMoisturePercentage = param.asInt();
+  Serial.printf("Min moisture was set to: %d\n", minimumSoilMoisturePercentage);
+}
+
 // General functions
 
 void measureMoisture(void* params) {
+  WaitForBlynk(10000);
+  Blynk.notify("Soil sensor up and running.");
   while (true) {
     uint value = analogRead(AOUT_PIN);  // read the analog value from sensor
-    uint percentage = moistureLevel(value, aquarium, desert);
+    currentSoiMoisturePercentage = moistureLevel(value, aquarium, desert);
     Serial.printf("Moisture value: %d\n", value);
-    Serial.printf("Moisture percentage: %d\n", percentage);
+    Serial.printf("Moisture percentage: %d\n", currentSoiMoisturePercentage);
     Serial.println("");
-    Blynk.virtualWrite(V0, percentage);
+    Blynk.virtualWrite(V0, currentSoiMoisturePercentage);
+    delay(1000);
+  }
+}
+
+void waterNotifier(void* params) {
+  while (true) {
+    if (currentSoiMoisturePercentage <= minimumSoilMoisturePercentage) {
+      Blynk.notify("Water the plant. Current moisture: %d%", currentSoiMoisturePercentage);
+    }
+    while (currentSoiMoisturePercentage <= minimumSoilMoisturePercentage) {
+      delay(1000);
+    }
     delay(1000);
   }
 }
