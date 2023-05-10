@@ -201,6 +201,7 @@ void blynkConnectionHandlerThreadFunction(void* params) {
   }
 }
 
+// TODO: needs own thread
 void flashLed(uint durationInMs) {
   pinMode(LED_BLUE_PIN, OUTPUT);
   digitalWrite(LED_BLUE_PIN, HIGH);
