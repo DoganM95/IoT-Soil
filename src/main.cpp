@@ -96,7 +96,7 @@ void measureMoisture(void* params) {
   WaitForBlynk(10000);
   Blynk.notify("Soil sensor up and running.");
   while (true) {
-    uint value = analogRead(AOUT_PIN);  // read the analog value from sensor
+    uint value = analogRead(ADC_PIN_1);  // read the analog value from sensor
     currentSoiMoisturePercentage = moistureLevel(value, aquarium, desert);
     Serial.printf("Moisture value: %d\n", value);
     Serial.printf("Moisture percentage: %d\n", currentSoiMoisturePercentage);
@@ -199,4 +199,11 @@ void blynkConnectionHandlerThreadFunction(void* params) {
     delay(1000);
     Serial.printf("Blynk Connection Handler Thread current stack size: %d , current Time: %d\n", blynkHandlerThreadStackSize - uxTaskGetStackHighWaterMark(NULL), xTaskGetTickCount());
   }
+}
+
+void flashLed(uint durationInMs) {
+  pinMode(LED_BLUE_PIN, OUTPUT);
+  digitalWrite(LED_BLUE_PIN, HIGH);
+  delay(durationInMs);
+  digitalWrite(LED_BLUE_PIN, LOW);
 }
