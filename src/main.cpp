@@ -66,6 +66,9 @@ uint currentSoiMoisturePercentage;
 
 void setup() {
   Serial.begin(115200);
+  pinMode(LED_BLUE_PIN, OUTPUT);
+  digitalWrite(LED_BLUE_PIN, HIGH);
+
   xTaskCreatePinnedToCore(wifiConnectionHandlerThreadFunction, "Wifi Connection Handling Thread", wifiHandlerThreadStackSize, NULL, 20, &wifiConnectionHandlerThreadFunctionHandle, 1);
   xTaskCreatePinnedToCore(blynkConnectionHandlerThreadFunction, "Blynk Connection Handling Thread", blynkHandlerThreadStackSize, NULL, 20, &blynkConnectionHandlerThreadFunctionHandle, 1);
   xTaskCreatePinnedToCore(measureMoisture, "Moisture Level Measurement Thread", 10000, NULL, 20, &moistureMeasurementThreadFunctionHandle, 0);
@@ -94,7 +97,7 @@ BLYNK_WRITE(V1)  // Button Widget is writing to pin V1
 
 void measureMoisture(void* params) {
   WaitForBlynk(10000);
-  Blynk.notify("Soil sensor up and running.");
+  // Blynk.notify("Soil sensor up and running."); // TODO: find substitute
   while (true) {
     uint value = analogRead(ADC_PIN_1);  // read the analog value from sensor
     currentSoiMoisturePercentage = moistureLevel(value, aquarium, desert);
@@ -109,7 +112,8 @@ void measureMoisture(void* params) {
 void waterNotifier(void* params) {
   while (true) {
     if (currentSoiMoisturePercentage <= minimumSoilMoisturePercentage) {
-      Blynk.notify("Water the plant. Current moisture: %d%", currentSoiMoisturePercentage);
+      // Notify user here to water the plant
+      // Blynk.notify("Water the plant. Current moisture: %d%", currentSoiMoisturePercentage); // TODO: find substitute
     }
     while (currentSoiMoisturePercentage <= minimumSoilMoisturePercentage) {
       delay(1000);
